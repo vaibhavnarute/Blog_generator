@@ -1,0 +1,74 @@
+name: Deploy to Hugging Face Spaces
+
+on:
+  push:
+    branches:
+      - main  # Change to 'dev' if you want to deploy from a different branch
+    paths:
+      - 'app.py'
+      - 'requirements.txt'
+       # Deploy only if these files change
+
+  schedule:
+    - cron: '0 12 * * *'  # Runs every day at 12:00 UTC (optional)
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Git
+        run: |
+          git config --global user.email "$(git log -1 --pretty=format:'%ae')"
+          git config --global user.name "$(git log -1 --pretty=format:'%an')"
+
+      - name: Clone Hugging Face Space
+        run: |
+          git clone https://Narute:$HF_TOKEN@huggingface.co/spaces/Narute/blog hf-space
+
+      - name: Sync changes
+        run: |
+          rsync -av --exclude=.git ./ hf-space/
+          cd hf-space
+
+      - name: Check for changes
+        id: check_changes
+        run: |
+          cd hf-space
+          if git diff --quiet; then
+            echo "No changes detected, skipping deployment."
+            exit 0
+          fi
+
+      - name: Delay before pushing
+        run: sleep 10  # Prevents Hugging Face from failing due to quick builds
+
+      - name: Commit and Push to Hugging Face
+        run: |
+          cd hf-space
+          git add .
+          git commit -m "🚀 Auto-deploy from GitHub Actions" || echo "No changes to commit"
+          git push
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+      - name: Notify on Discord
+        if: success()
+        run: |
+          curl -H "Content-Type: application/json" \
+          -d '{"content":"✅ Deployment successful on Hugging Face! 🚀"}' \
+          ${{ secrets.DISCORD_WEBHOOK }}
+
+      - name: Send email if failed
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.narutevaibhav95@gmail.com }}
+          password: ${{ secrets.vaibhav dj90 }}
+          subject: "❌ Hugging Face Deployment Failed"
+          body: "Check GitHub Actions logs for details."
